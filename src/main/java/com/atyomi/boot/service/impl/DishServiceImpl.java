@@ -49,6 +49,7 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
     @Override
     public void deleteDishes(List<Long> ids) {
         dishFlavorService.removeByIds(ids);
+
         this.removeByIds(ids);
     }
 

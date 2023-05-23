@@ -11,18 +11,22 @@ import com.atyomi.boot.service.DishService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sun.org.apache.bcel.internal.generic.LNEG;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-
+@Slf4j
 @RestController
 @RequestMapping("/dish")
 public class DishController {
+    @Autowired
+    private RedisTemplate<String,Object> redisTemplate;
     @Autowired
     private DishService dishService;
     @Autowired
@@ -69,6 +73,9 @@ public class DishController {
     @PostMapping()
     public R<String> addDish(@RequestBody DishDto dishDto){
         dishService.saveWithFlavor(dishDto);
+        //如果缓存中有对应菜品则删除缓存
+        String key = "dish_"+dishDto.getCategoryId()+"_"+dishDto.getStatus();
+        redisTemplate.delete(key);
         return R.success("添加成功");
     }
     @GetMapping("/{dishId}")
@@ -79,6 +86,8 @@ public class DishController {
     @PutMapping()
     public R<String> alterDish(@RequestBody DishDto dishDto){
         dishService.saveWithFlavor(dishDto);
+        String key = "dish_"+dishDto.getCategoryId()+"_"+dishDto.getStatus();
+        redisTemplate.delete(key);
         return R.success("保存");
     }
     @PostMapping("/status/{state}")
@@ -90,6 +99,13 @@ public class DishController {
             queryWrapper.eq(Dish::getId, id);
             Dish dish = new Dish();
             dish.setStatus(state);
+
+            //查询原来的菜品状态，清空缓存
+            DishDto oneDish = dishService.getOneDish(id);
+            Integer status = oneDish.getStatus();
+            String key = "dish_"+oneDish.getCategoryId()+"_"+status;
+            redisTemplate.delete(key);
+            //更新菜品状态
             dishService.update(dish, queryWrapper);
         }
         return R.success("修改状态成功");
@@ -99,15 +115,32 @@ public class DishController {
         String[] split = ids.split(",");
         List<Long> collect = Arrays.stream(split).map(Long::parseLong).collect(Collectors.toList());
         dishService.deleteDishes(collect);
+        List<Dish> dishes = dishService.listByIds(collect);
+        for (Dish dish : dishes) {
+            Long categoryId = dish.getCategoryId();
+            //缓存中删除对应系列的菜品数据
+            String key = "dish_"+dish.getCategoryId()+"_"+dish.getStatus();
+            redisTemplate.delete(key);
+        }
         return R.success("删除成功");
     }
     @GetMapping("/list")
     public R<List<DishDto>> getDishesByCategoryId(Long categoryId,Integer status){
+
+
+        //使用什么作为key呢？ dish_+categoryId+_+status
+        //如果缓存中有，则从缓存中取
+        String key = "dish_"+categoryId+"_"+status;
+        List<DishDto> dishes =(List<DishDto>) redisTemplate.opsForValue().get(key);
+        if(dishes !=null){
+            log.info("从缓存中取菜品数据:"+key);
+            return R.success(dishes);
+        }
+        //否则查询数据库
+
         LambdaQueryWrapper<Dish> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(Dish::getCategoryId,categoryId);
         queryWrapper.eq(Dish::getStatus,status);
-
-
         List<Dish> list = dishService.list(queryWrapper);
         List<DishDto> res = list.stream().map(item -> {
             DishDto dishDto = new DishDto();
@@ -117,8 +150,11 @@ public class DishController {
             List<DishFlavor> list1 = dishFlavorService.list(queryWrapper1);
 
             dishDto.setFlavors(list1);
+
             return dishDto;
         }).collect(Collectors.toList());
+        //在Redis中缓存对应菜品
+        redisTemplate.opsForValue().set(key,res);
         return R.success(res);
     }
 }
