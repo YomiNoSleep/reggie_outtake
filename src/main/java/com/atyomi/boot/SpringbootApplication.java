@@ -14,10 +14,12 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.ConfigurableApplicationContext;
 
 @Slf4j
 @SpringBootApplication
+@EnableCaching
 //@MapperScan("com.atyomi.boot.mapper")
 public class SpringbootApplication {
     public static void main(String[] args) {

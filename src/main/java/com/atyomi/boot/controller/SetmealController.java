@@ -12,6 +12,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -25,6 +27,7 @@ public class SetmealController {
     private SetmealService setmealService;
     @Autowired
     private CategoryService categoryService;
+    @CacheEvict(value = "setmealCache",allEntries = true)
     @PostMapping()
     public R<String> saeSetmeal(@RequestBody SetmealDto setmealDto){
         setmealService.addSetmeal(setmealDto);
@@ -72,6 +75,7 @@ public class SetmealController {
         SetmealDto oneSetmeal = setmealService.getOneSetmeal(setmealId);
         return R.success(oneSetmeal);
     }
+    @CacheEvict(value = "setmealCache",allEntries = true)
     @PostMapping("/status/{state}")
     public R<String> changeState(@PathVariable("state") Integer state,String ids){
         String[] split = ids.split(",");
@@ -85,6 +89,7 @@ public class SetmealController {
         }
         return R.success("修改状态成功");
     }
+    @CacheEvict(value = "setmealCache",allEntries = true)
     @DeleteMapping()
     public R<String> deleteSetmeals(String ids){
         String[] split = ids.split(",");
@@ -92,6 +97,7 @@ public class SetmealController {
         setmealService.removeByIds(collect);
         return R.success("删除成功");
     }
+    @Cacheable(value = "setmealCache",key = "#categoryId.toString()+'_'+#status.toString()")
     @GetMapping("/list")
     public R<List<Setmeal>> getSetmealByCategoryId(Long categoryId,Integer status){
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
